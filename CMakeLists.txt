@@ -35,10 +35,9 @@ include_directories(${GLEW_INCLUDE_DIRS})
 file(GLOB HW_SRC
         main.cpp
         mainwindows.cpp
-        candle.c
-        candle_ctrl_req.c
-        gs_usb.c
-        gsusb.c
+        api/candle.c
+        api/candle_ctrl_req.c
+        api/gsusb.c
         )
 add_executable(winusb_can_test main.cpp ${SOURCE} ${HW_SRC})
 target_link_libraries(winusb_can_test
