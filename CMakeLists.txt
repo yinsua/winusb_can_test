@@ -33,13 +33,14 @@ find_package(GLEW REQUIRED)
 include_directories(${GLEW_INCLUDE_DIRS})
 
 file(GLOB HW_SRC
-    main.cpp
+        main.cpp
+        mainwindows.cpp
         candle.c
         candle_ctrl_req.c
         gs_usb.c
         gsusb.c
-)
-add_executable(winusb_can_test main.cpp ${SOURCE}  ${HW_SRC})
+        )
+add_executable(winusb_can_test main.cpp ${SOURCE} ${HW_SRC})
 target_link_libraries(winusb_can_test
         glfw
         ${OPENGL_LIBRARIES}

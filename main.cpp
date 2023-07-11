@@ -1,98 +1,115 @@
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
 #include <cstdio>
-#include "candle.h"
+#include <GLFW/glfw3.h>
 
-int main(int argc, char *argv[])
-{
+// [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
+// To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
+// Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
+#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
+#pragma comment(lib, "legacy_stdio_definitions")
+#endif
 
-    candle_list_handle clist;
-    candle_handle hdev;
-    candle_frame_t frame;
-    candle_devstate_t state;
-    uint8_t num_devices;
+static void glfw_error_callback(int error, const char *description) {
+  fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+}
 
-    if (!candle_list_scan(&clist)) {
-        printf("cannot scan for candle devices.\n");
-        candle_list_free(clist);
-        return -1;
-    }
+extern void mainwindows();
 
-    candle_list_length(clist, &num_devices);
+int main(int argc, char *argv[]) {
+// Setup window
+  glfwSetErrorCallback(glfw_error_callback);
+  if (!glfwInit())
+    return 1;
 
-    if (num_devices==0) {
-        printf("cannot find any candle devices.\n");
-        return 0;
-    }
+  // Decide GL+GLSL versions
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+  // GL ES 2.0 + GLSL 100
+    const char* glsl_version = "#version 100";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(__APPLE__)
+  // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+  // GL 3.0 + GLSL 130
+  const char *glsl_version = "#version 130";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+#endif
 
-    printf("detected %d candle device(s):\n", num_devices);
-    for (unsigned i=0; i<num_devices; i++) {
-        if (candle_dev_get(clist, i, &hdev)) {
-            candle_dev_get_state(hdev, &state);
+  // Create window with graphics context
+  GLFWwindow *window = glfwCreateWindow(960, 540, "winusb can test", nullptr, nullptr);
+  if (window == nullptr)
+    return 1;
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1); // Enable vsync
 
-            uint8_t channels;
-            candle_channel_count(hdev, &channels);
-            printf("%d: state=%d interfaces=%d path=%S\n", i, state, channels, candle_dev_get_path(hdev));
+  // Setup Dear ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  ImFontConfig config_font;
+  config_font.MergeMode = true;
+  io.Fonts->AddFontDefault();
+  io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\simfang.ttf)",
+                               16.0f, &config_font, io.Fonts->GetGlyphRangesChineseFull());
+//  io.Fonts->Build();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+//  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
 
-            candle_dev_free(hdev);
-        } else {
-            printf("error getting info for device %d\n", i);
-        }
-    }
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+  //ImGui::StyleColorsLight();
 
-    if (!candle_dev_get(clist, 0, &hdev)) {
-        printf("error getting info for device %d\n", 0);
-        return -2;
-    }
+  // Setup Platform/Renderer backends
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplOpenGL3_Init(glsl_version);
 
-    if (!candle_dev_open(hdev)) {
-        printf("could not open candle device (%d)\n", candle_dev_last_error(hdev));
-        return -3;
-    }
+  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    if (!candle_channel_set_bitrate(hdev, 0, 500000)) {
-        printf("could not set bitrate.\n");
-        return -4;
-    }
+  // Main loop
+  while (!glfwWindowShouldClose(window)) {
+    // Poll and handle events (inputs, window resize, etc.)
+    // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+    // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
+    // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
+    // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+    glfwPollEvents();
 
-    if (!candle_channel_start(hdev, 0, 0)) {
-        printf("could not start device.\n");
-        return -5;
-    }
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 
-    while (true) {
+    mainwindows();
 
-        if (candle_frame_read(hdev, &frame, 1000)) {
+    // Rendering
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w,
+                 clear_color.w);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            if (candle_frame_type(&frame) == CANDLE_FRAMETYPE_RECEIVE) {
-
-                uint8_t dlc = candle_frame_dlc(&frame);
-                uint8_t *data = candle_frame_data(&frame);
-
-                printf(
-                   "%10d ID 0x%08x [%d]",
-                   candle_frame_timestamp_us(&frame),
-                   candle_frame_id(&frame),
-                   dlc
-                );
-                for (int i=0; i<dlc; i++) {
-                     printf(" %02X", data[i]);
-                }
-                printf("\n");
-
-                frame.can_id += 1;
-                candle_frame_send(hdev, 0, &frame);
-
-            }
-        } else {
-            candle_err_t err = candle_dev_last_error(hdev);
-            if (err == CANDLE_ERR_READ_TIMEOUT) {
-                printf("Timeout waiting for CAN data\n");
-            } else {
-              printf("Error reading candle frame: %d (%d)\n", err, sizeof(frame));
-                return -err;
-            }
-        }
-
-    }
-
-    return 0;
+    glfwSwapBuffers(window);
+  }
+  // Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
+  ImGui::DestroyContext();
+  glfwDestroyWindow(window);
+  glfwTerminate();
+  return 0;
 }
