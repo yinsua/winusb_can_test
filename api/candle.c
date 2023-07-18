@@ -403,11 +403,27 @@ bool __stdcall DLL candle_channel_set_bitrate(candle_handle hdev, uint8_t ch, ui
     // TODO ensure device is open, check channel count..
     candle_device_t *dev = (candle_device_t*)hdev;
 
-    if (dev->bt_const.fclk_can != 48000000) {
-        /* this function only works for the candleLight base clock of 48MHz */
-        dev->last_error = CANDLE_ERR_BITRATE_FCLK;
+  if (dev->bt_const.fclk_can == 48000000) {
+    ;
+  }
+  else if(dev->bt_const.fclk_can == 170000000){
+    candle_bittiming_t t;
+    t.prop_seg = 1;
+    t.sjw = 1;
+    t.phase_seg1 = 147;
+    t.phase_seg2 = 21;
+    switch (bitrate) {
+      case 500000: t.brp = 2; break;
+      case 1000000: t.brp = 1; break;
+      default: dev->last_error = CANDLE_ERR_BITRATE_UNSUPPORTED;
         return false;
     }
+    return candle_ctrl_set_bittiming(dev, ch, &t);
+  }
+  else{
+    dev->last_error = CANDLE_ERR_BITRATE_FCLK;
+    return false;
+  }
 
     candle_bittiming_t t;
     t.prop_seg = 1;
